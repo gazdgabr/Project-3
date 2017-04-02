@@ -17,6 +17,7 @@ import tweepy
 import twitter_info # same deal as always...
 import json
 import sqlite3
+import re
 
 ## Your name: Gabriella Gazdecki
 ## The names of anyone you worked with on this project:
@@ -64,6 +65,7 @@ def get_user_tweets(username):
 		return CACHE_DICTION[username]
 
 	else:
+		
 		newTweets = api.user_timeline(screen_name = username, count=20)
 		CACHE_DICTION[username] = newTweets
 
@@ -90,7 +92,7 @@ umich_tweets = get_user_tweets("umich")
 # - tweet_id (containing the string id belonging to the Tweet itself, from the data you got from Twitter) -- this column 
 # should be the PRIMARY KEY of this table
 # - text (containing the text of the Tweet)
-# - user_posted (an ID string, referencing the Users table, see below)
+# - user_id (an ID string, referencing the Users table, see below)
 # - time_posted (the time at which the tweet was created)
 # - retweets (containing the integer representing the number of times the tweet has been retweeted)
 
@@ -120,14 +122,84 @@ umich_tweets = get_user_tweets("umich")
 ## of the Tweet text to find out which they are! Do some nested data investigation on a dictionary that represents 1 tweet
 ## to see it!
 
+def get_twitter_users(tweet):
+	return re.findall("@([0-9A-Z_a-z]+)", tweet)
+
+def getMentionedUsers(inputTweets):
+	ListOut = []
+	for i in range(20):
+		ListOut += get_twitter_users(inputTweets[i]["text"])
+	return ListOut
+
+
+conn = sqlite3.connect('project3_tweets.db')
+cur = conn.cursor()
+
+cur.execute('DROP TABLE IF EXISTS Tweets')
+cur.execute('DROP TABLE IF EXISTS Users')
+
+statement = 'CREATE TABLE IF NOT EXISTS '
+statement += 'Tweets (tweet_id INTEGER PRIMARY KEY, text TEXT, user_id TEXT, time_posted TIMESTAMP, retweets INTEGER)'
+cur.execute(statement)
+
+statement = 'CREATE TABLE IF NOT EXISTS '
+statement += 'Users (user_id INTEGER PRIMARY KEY, screen_name TEXT, num_favs INTEGER, description TEXT)'
+cur.execute(statement)
+
+twenty_tweets = get_user_tweets('umich')
+
+#print(twenty_tweets[0].keys())
+#print(twenty_tweets[0]["user"].keys())
+#print(twenty_tweets[0]["user"]["description"].keys())
+
+element_list = []
+
+for i in range(20):
+	tweet_id_item = twenty_tweets[i]["id"]
+	tweet_text_item = twenty_tweets[i]["text"]
+	user_id_item = twenty_tweets[i]["user"]["id"]
+	time_item = twenty_tweets[i]["created_at"]
+	retweet_item = twenty_tweets[i]["retweet_count"]
+
+	element_list.append((tweet_id_item, tweet_text_item, user_id_item, time_item, retweet_item))
+
+statement = 'INSERT INTO Tweets VALUES (?, ?, ?, ?, ?)'    
+for element in element_list:
+	cur.execute(statement, element)
+
+conn.commit()
+
+
+element_list = []
 
 
 
+maBoiz = getMentionedUsers(twenty_tweets)
+maBoiz = list(set(maBoiz))
 
 
+if "umich" in maBoiz:
+	maBoiz.remove("umich")
+
+userList = []
+for maBoi in maBoiz:
+	guy = api.get_user(maBoi)
+	userList.append(guy)
 
 
+for daBoi in userList:
+	user_id_item = daBoi["id"]
+	screen_name_item = daBoi["screen_name"]
+	favs_item = daBoi["favourites_count"]
+	description_item = daBoi["description"]
 
+	element_list.append((user_id_item, screen_name_item, favs_item, description_item))
+
+statement = 'INSERT INTO Users VALUES (?, ?, ?, ?)'
+for element in element_list:
+	cur.execute(statement, element)
+
+conn.commit()
 
 
 ## Task 3 - Making queries, saving data, fetching data
