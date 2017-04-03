@@ -146,47 +146,47 @@ statement = 'CREATE TABLE IF NOT EXISTS '
 statement += 'Users (user_id INTEGER PRIMARY KEY, screen_name TEXT, num_favs INTEGER, description TEXT)'
 cur.execute(statement)
 
+
+def commitTweets(con, twenty_tweets):
+	element_list = []
+
+	for tweet in twenty_tweets:
+		tweet_id_item = tweet["id"]
+		tweet_text_item = tweet["text"]
+		user_id_item = tweet["user"]["id"]
+		time_item = tweet["created_at"]
+		retweet_item = tweet["retweet_count"]
+		element_list.append((tweet_id_item, tweet_text_item, user_id_item, time_item, retweet_item))
+
+	statement = 'INSERT INTO Tweets VALUES (?, ?, ?, ?, ?)'    
+	for element in element_list:
+		cur.execute(statement, element)
+
+	conn.commit()
+
 twenty_tweets = get_user_tweets('umich')
-
-#print(twenty_tweets[0].keys())
-#print(twenty_tweets[0]["user"].keys())
-#print(twenty_tweets[0]["user"]["description"].keys())
-
-element_list = []
-
-for i in range(20):
-	tweet_id_item = twenty_tweets[i]["id"]
-	tweet_text_item = twenty_tweets[i]["text"]
-	user_id_item = twenty_tweets[i]["user"]["id"]
-	time_item = twenty_tweets[i]["created_at"]
-	retweet_item = twenty_tweets[i]["retweet_count"]
-
-	element_list.append((tweet_id_item, tweet_text_item, user_id_item, time_item, retweet_item))
-
-statement = 'INSERT INTO Tweets VALUES (?, ?, ?, ?, ?)'    
-for element in element_list:
-	cur.execute(statement, element)
-
-conn.commit()
+commitTweets(conn, twenty_tweets)
 
 
 element_list = []
 
-
-
+# getting all the users mentioned on the umich timeline, and eliminating all duplicates
+# making sure it is case insensitive
 maBoiz = getMentionedUsers(twenty_tweets)
-maBoiz = list(set(maBoiz))
+lowercaseMaBoiz = []
+for boy in maBoiz:
+	lowercaseMaBoiz.append(boy.lower())
+maBoiz = list(set(lowercaseMaBoiz))
 
-
-if "umich" in maBoiz:
-	maBoiz.remove("umich")
-
+# iterating across all the new user namnes, and using the get_user() method 
+# storing the results in userList
 userList = []
 for maBoi in maBoiz:
 	guy = api.get_user(maBoi)
 	userList.append(guy)
 
 
+# parsing the correct information and committing it to the database
 for daBoi in userList:
 	user_id_item = daBoi["id"]
 	screen_name_item = daBoi["screen_name"]
@@ -232,8 +232,6 @@ more_than_25_rts = cur.fetchall()
 descriptions_fav_users = "SELECT description FROM Users WHERE num_favs > 5"
 cur.execute(descriptions_fav_users)
 descriptions_fav_users = [ description[0] for description in cur.fetchall()]
-#print(descriptions_fav_users)
-
 
 
 # Make a query using an INNER JOIN to get a list of tuples with 2 elements in each tuple: the user screenname and the text of 
@@ -249,10 +247,9 @@ joined_result = cur.fetchall()
 ## Use a set comprehension to get a set of all words (combinations of characters separated by whitespace) among the descriptions
 ## in the descriptions_fav_users list. Save the resulting set in a variable called description_words.
 
-#print(joined_result)
 description_words = [description.split() for description in descriptions_fav_users]
 description_words = [item for sublist in description_words for item in sublist]
-description_words = set([item.encode("utf-8") for item in description_words])
+description_words = set([item.encode('utf-8') for item in description_words])
 
 
 ## Use a Counter in the collections library to find the most common character among all of the descriptions in the 
@@ -269,16 +266,26 @@ most_common_char = most_common_char[0][0]
 # that that user posted. You may need to make additional queries to your database! To do this, you can use, and must use at 
 # least one of: the DefaultDict container in the collections library, a dictionary comprehension, list comprehension(s).
 # You should save the final dictionary in a variable called twitter_info_diction.
-print(screen_names)
+#print(screen_names)
+
+#grabbing tweets for all other screen names in user table, and storing them in the tweets table
+for screenName in screen_names:
+	if screenName != "umich":
+		commitTweets(conn, get_user_tweets(screenName))
+
+
 twitter_info_diction = "SELECT Users.screen_name, Tweets.text FROM Tweets INNER JOIN Users ON Tweets.user_id=Users.user_id"
 cur.execute(twitter_info_diction)
 twitter_info_diction = cur.fetchall()
 
+# adding a key for each screen name in screen_names, and making its value an empty list
+dummy = {key: [] for key in screen_names}
 
-twitter_info_diction = {key: value for (key, value) in twitter_info_diction}
-
-print(twitter_info_diction)
-
+# iterating across the list of tuples returned by the inner joined query and appending the tweets to the
+# list of strings for the appropriate key 
+for yaBoi in twitter_info_diction:
+	dummy[yaBoi[0]] = dummy[yaBoi[0]] + [yaBoi[1]]
+twitter_info_diction = dummy
 
 ### IMPORTANT: MAKE SURE TO CLOSE YOUR DATABASE CONNECTION AT THE END OF THE FILE HERE SO YOU DO NOT LOCK YOUR DATABASE 
 # (it's fixable, but it's a pain). ###
